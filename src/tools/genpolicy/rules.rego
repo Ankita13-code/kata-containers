@@ -136,7 +136,8 @@ allow_create_container_input {
     i_process := i_oci.Process
     count(i_process.SelinuxLabel) == 0
     count(i_process.User.Username) == 0
-
+    count(i_process.ApparmorProfile) == 0
+    
     print("allow_create_container_input: true")
 }
 
@@ -1274,8 +1275,31 @@ CreateSandboxRequest {
     allow_sandbox_storages(input.storages)
 }
 
+allow_exec(p_container, i_process) {
+    print("allow_exec: start")
+
+    p_oci = p_container.OCI
+    p_s_name = p_oci.Annotations[S_NAME_KEY]
+    s_namespace = get_state_val("namespace")
+    allow_probe_process(p_oci.Process, i_process, p_s_name, s_namespace)
+
+    print("allow_exec: true")
+}
+
+allow_interactive_exec(p_container, i_process) {
+    print("allow_interactive_exec: start")
+
+    p_oci = p_container.OCI
+    p_s_name = p_oci.Annotations[S_NAME_KEY]
+    s_namespace = get_state_val("namespace")
+    allow_interactive_process(p_oci.Process, i_process, p_s_name, s_namespace)
+
+    print("allow_interactive_exec: true")
+}
+
 ExecProcessRequest {
     print("ExecProcessRequest 1: input =", input)
+    allow_exec_process_input
 
     some p_command in policy_data.request_defaults.ExecProcessRequest.allowed_commands
     print("ExecProcessRequest 1: p_command =", p_command)
@@ -1285,6 +1309,7 @@ ExecProcessRequest {
 }
 ExecProcessRequest {
     print("ExecProcessRequest 2: input =", input)
+    allow_exec_process_input
 
     # TODO: match input container ID with its corresponding container.exec_commands.
     some container in policy_data.containers
@@ -1298,6 +1323,7 @@ ExecProcessRequest {
 }
 ExecProcessRequest {
     print("ExecProcessRequest 3: input =", input)
+    allow_exec_process_input
 
     i_command = concat(" ", input.process.Args)
     print("ExecProcessRequest 3: i_command =", i_command)
@@ -1308,6 +1334,16 @@ ExecProcessRequest {
     regex.match(p_regex, i_command)
 
     print("ExecProcessRequest 3: true")
+}
+
+allow_exec_process_input {
+    is_null(input.string_user)
+
+    i_process := input.process
+    count(i_process.SelinuxLabel) == 0
+    count(i_process.ApparmorProfile) == 0
+
+    print("allow_exec_process_input: true")
 }
 
 UpdateRoutesRequest {
